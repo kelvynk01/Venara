@@ -114,8 +114,24 @@ model Workspace {
   connectedApps ConnectedApp[]
   agentRequests AgentRequest[]
   usageEvents   UsageEvent[]
+  secrets       Secret[]
 
   @@index([stripeCustomerId])
+}
+
+// Encrypted secret store (Brief §17). Holds AES-256-GCM ciphertext only — never the
+// plaintext value. `ConnectedApp.credentialsRef` points to a Secret.id.
+model Secret {
+  id          String   @id @default(cuid())
+  workspaceId String
+  // base64(iv).base64(authTag).base64(ciphertext) — opaque; decrypted only in memory.
+  ciphertext  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 model User {

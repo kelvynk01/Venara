@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@sentry/node": "^8.42.0",
+    "@venara/capture": "*",
     "@venara/db": "*",
     "@venara/shared": "*",
+    "@venara/storage": "*",
     "bullmq": "^5.34.5",
     "ioredis": "^5.4.2",
     "zod": "^3.23.8"

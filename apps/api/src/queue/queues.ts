@@ -14,11 +14,15 @@ import { redisConnection } from './connection';
 /** Phase 1: only the no-op queue exists — it proves the producer→worker→Bull Board path. */
 export const noopQueue = new Queue(QUEUE_NAMES.noop, { connection: redisConnection });
 
+/** Phase 2: capture queue — drives app + records take (Brief §13). */
+export const captureQueue = new Queue(QUEUE_NAMES.capture, { connection: redisConnection });
+
 /** Every queue the API produces to (registered with Bull Board). */
-export const producerQueues: Queue[] = [noopQueue];
+export const producerQueues: Queue[] = [noopQueue, captureQueue];
 
 const queueByName: Partial<Record<QueueName, Queue>> = {
   [QUEUE_NAMES.noop]: noopQueue,
+  [QUEUE_NAMES.capture]: captureQueue,
 };
 
 /** Payload every job carries so the worker can update the matching Job mirror row. */

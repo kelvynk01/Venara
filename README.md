@@ -16,7 +16,8 @@ Plain **npm workspaces** (no Turborepo/Nx). TypeScript only, `strict` everywhere
 ```
 venara/
 ├── apps/
-│   ├── dashboard/   Next.js 14 (App Router) frontend
+│   ├── landing/     Next.js 14 marketing site (public) — apex venara.ai
+│   ├── dashboard/   Next.js 14 product app (Clerk-gated) — app.venara.ai
 │   ├── api/         Fastify API — thin routes → services
 │   └── worker/      BullMQ workers (capture, render, diff, digest…)
 ├── packages/
@@ -76,13 +77,36 @@ npm run dev:dashboard   # Next.js on :3000
 
 ### Environment notes / gotchas
 
-- **Prisma engine download behind a proxy.** If `prisma generate` fails with
-  `unable to verify the first certificate`, your network uses a custom root CA. Run it
-  with the system trust store: `NODE_OPTIONS="--use-system-ca" npm run db:generate`.
+- **Custom root CA / proxy → `unable to verify the first certificate`.** This network uses a
+  custom root CA, which breaks tools that fetch over TLS at build time. Prefix the command
+  with the system trust store:
+  - Prisma: `NODE_OPTIONS="--use-system-ca" npm run db:generate`
+  - Next.js builds (`next/font/google` fetches fonts): `NODE_OPTIONS="--use-system-ca" npm run build`
+  This only affects this machine; Railway's network builds normally without the flag.
 - **Single `ioredis`.** The root `overrides` pin `ioredis` to one version so BullMQ and our
   own connection share a single copy (avoids a TypeScript dual-package clash). `npm ls`
   may print `invalid` because BullMQ pins an exact patch — that's cosmetic; the copy is
   deduped and patch-compatible.
+
+---
+
+## Deployment (Railway)
+
+All compute, DB, and cache run on **Railway** (Brief §4); object storage is **Cloudflare R2**.
+
+| Railway service | Source | Build | Public URL |
+|---|---|---|---|
+| `landing` | `apps/landing` | Nixpacks (`next build`/`start`) | `venara.ai` (apex) |
+| `dashboard` | `apps/dashboard` | Nixpacks (`next build`/`start`) | `app.venara.ai` |
+| `api` | `apps/api` | `docker/api.Dockerfile` | `api.venara.ai` |
+| `worker` | `apps/worker` | `docker/worker.Dockerfile` (FFmpeg) | — (no ingress) |
+| Postgres | Railway add-on | — | → `DATABASE_URL` |
+| Redis | Railway add-on | — | → `REDIS_URL` |
+
+- The landing site links to `${NEXT_PUBLIC_APP_URL}` (= `https://app.venara.ai`) for login/signup.
+- Media is served to browsers via **signed R2 URLs**, never proxied through `api` (Brief §16).
+- Run `prisma migrate deploy` on release (not `migrate dev`); the worker scales independently
+  of the api since capture/render are CPU/memory heavy.
 
 ---
 

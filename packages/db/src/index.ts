@@ -39,6 +39,11 @@ export type {
   UsageEvent,
 } from '@prisma/client';
 
+// Encrypted secret store (Brief §17).
+export * from './secrets';
+
 // Query helpers — the supported call surface for services.
 export * from './queries/users';
 export * from './queries/jobs';
+export * from './queries/apps';
+export * from './queries/captures';
