@@ -3,9 +3,10 @@
 FROM node:20-slim AS base
 WORKDIR /app
 
-# FFmpeg is required by the render workers.
+# FFmpeg + DejaVu fonts are required by the render workers.
+# fonts-dejavu-core provides DejaVuSans-Bold.ttf used by the FFmpeg drawtext filter.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg \
+  && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core \
   && rm -rf /var/lib/apt/lists/*
 
 COPY . .

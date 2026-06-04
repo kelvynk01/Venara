@@ -18,6 +18,7 @@ import { capturesRoutes } from './routes/captures';
 import { devRoutes } from './routes/dev';
 import { healthRoutes } from './routes/health';
 import { meRoutes } from './routes/me';
+import { videosRoutes } from './routes/videos';
 
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -65,6 +66,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       await v1.register(meRoutes);
       await v1.register(appsRoutes);
       await v1.register(capturesRoutes);
+      await v1.register(videosRoutes);
       await v1.register(devRoutes);
     },
     { prefix: API_PREFIX },

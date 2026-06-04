@@ -142,6 +142,60 @@ export const captureRequestSchema = z.object({
 export type CaptureStepInput = z.infer<typeof captureStepSchema>;
 export type CaptureRequestInput = z.infer<typeof captureRequestSchema>;
 
+// ─── Video + render schemas (Phase 3) ─────────────────────────────────────────
+
+export const videoStatusSchema = z.enum(['draft', 'ready', 'failed']);
+export const renderStatusSchema = z.enum(['queued', 'rendering', 'done', 'failed']);
+
+/** POST /v1/apps/:id/videos — create a video from a flow (Brief §12). */
+export const createVideoSchema = z.object({
+  flowId: z.string().min(1),
+  type: videoTypeSchema,
+  /** Defaults applied server-side per type (how-to → 16:9, marketing → 9:16). */
+  aspect: renderAspectSchema.optional(),
+});
+
+/** A render with signed media URLs (added server-side; never stored). */
+export const renderPublicSchema = z.object({
+  id: z.string(),
+  aspect: renderAspectSchema,
+  status: renderStatusSchema,
+  durationMs: z.number().nullable(),
+  mp4Url: z.string().url().nullable().optional(),
+  thumbUrl: z.string().url().nullable().optional(),
+  captionsUrl: z.string().url().nullable().optional(),
+});
+
+/** GET /v1/videos/:id — video + current render + freshness (Brief §12/§15). */
+export const videoPublicSchema = z.object({
+  id: z.string(),
+  connectedAppId: z.string(),
+  flowId: z.string(),
+  type: videoTypeSchema,
+  title: z.string(),
+  status: videoStatusSchema,
+  freshness: freshnessSchema,
+  createdAt: z.string(),
+  currentRender: renderPublicSchema.nullable(),
+});
+
+export type CreateVideoInput = z.infer<typeof createVideoSchema>;
+export type RenderPublic = z.infer<typeof renderPublicSchema>;
+export type VideoPublic = z.infer<typeof videoPublicSchema>;
+
+/** A flow in the app's flow map (Brief §12 GET /v1/apps/:id) — lets the UI offer "make a video". */
+export const flowPublicSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  intent: z.string().nullable(),
+  status: z.enum(['discovered', 'requested', 'ready', 'archived']),
+  /** Status of the flow's most recent capture, if any. */
+  latestCaptureStatus: captureStatusSchema.nullable(),
+  createdAt: z.string(),
+});
+
+export type FlowPublic = z.infer<typeof flowPublicSchema>;
+
 /**
  * Parse and validate a process environment against a Zod schema, failing fast with
  * a readable message. Used by each app to validate its own env subset at boot —

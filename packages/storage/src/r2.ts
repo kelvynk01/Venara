@@ -67,6 +67,28 @@ export class R2Storage implements StorageProvider {
     return key;
   }
 
+  async get(key: string): Promise<Uint8Array> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!response.Body) {
+      throw new Error(`Storage key not found: ${key}`);
+    }
+    // response.Body is a ReadableStream in Node.js SDK v3
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+      chunks.push(chunk);
+    }
+    const total = chunks.reduce((acc, c) => acc + c.byteLength, 0);
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return merged;
+  }
+
   getSignedUrl(key: string, options?: SignedUrlOptions): Promise<string> {
     return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
       expiresIn: options?.expiresInSeconds ?? DEFAULT_EXPIRY,

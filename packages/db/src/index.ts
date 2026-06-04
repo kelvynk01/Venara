@@ -47,3 +47,4 @@ export * from './queries/users';
 export * from './queries/jobs';
 export * from './queries/apps';
 export * from './queries/captures';
+export * from './queries/videos';

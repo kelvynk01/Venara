@@ -10,11 +10,13 @@
  */
 import { useAuth } from '@clerk/nextjs';
 import { BRAND, type ConnectedAppPublic, type ConnectedAppStatus } from '@venara/shared';
-import { ExternalLink, Film, GitBranch, Globe, Trash2 } from 'lucide-react';
+import { ExternalLink, Globe, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { EmptyState, ErrorState } from '@/components/states';
+import { AppFlows } from '@/components/app-flows';
+import { AppVideos } from '@/components/app-videos';
+import { ErrorState } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiRequestError, apiFetch } from '@/lib/api';
@@ -171,29 +173,11 @@ export function AppDetail({ id }: { id: string }): JSX.Element {
       {/* Divider */}
       <hr className="my-8 border-neutral-200" />
 
-      {/* Flows section — placeholder (Phase 3+) */}
-      <section className="mb-10">
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-neutral-500">
-          Flows
-        </h2>
-        <EmptyState
-          icon={<GitBranch className="h-7 w-7" />}
-          title="No flows yet"
-          description="Flows are discovered automatically when you run your first capture. This section comes to life in a later phase."
-        />
-      </section>
+      {/* Flows section (Phase 3) */}
+      <AppFlows appId={id} />
 
-      {/* Videos section — placeholder (Phase 3+) */}
-      <section>
-        <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-neutral-500">
-          Videos
-        </h2>
-        <EmptyState
-          icon={<Film className="h-7 w-7" />}
-          title="No videos yet"
-          description="Videos are produced from captured flows. The video library arrives in a later phase."
-        />
-      </section>
+      {/* Videos section (Phase 3) */}
+      <AppVideos appId={id} />
     </main>
   );
 }

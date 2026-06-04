@@ -11,6 +11,8 @@ export interface SignedUrlOptions {
 export interface StorageProvider {
   /** Upload bytes to `key`, returning the stored key. */
   put(key: string, body: Uint8Array | Buffer, contentType: string): Promise<string>;
+  /** Download the raw bytes for `key` (used by workers that need a local copy). */
+  get(key: string): Promise<Uint8Array>;
   /** A time-limited GET url for direct browser/playback access. */
   getSignedUrl(key: string, options?: SignedUrlOptions): Promise<string>;
   /** A time-limited PUT url for direct uploads, when needed. */

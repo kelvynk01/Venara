@@ -12,6 +12,7 @@ import { redisConnection } from './connection';
 import { env } from './env';
 import { processCapture } from './processors/capture';
 import { processNoop } from './processors/noop';
+import { processRender } from './processors/render';
 import { initSentry, captureError } from './sentry';
 
 initSentry();
@@ -53,6 +54,7 @@ function startWorker(queue: string, processor: (job: Job) => Promise<unknown>): 
 
 workers.push(startWorker(QUEUE_NAMES.noop, processNoop));
 workers.push(startWorker(QUEUE_NAMES.capture, processCapture));
+workers.push(startWorker(QUEUE_NAMES.render, processRender));
 
 async function shutdown(signal: string): Promise<void> {
   // eslint-disable-next-line no-console
