@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* neutral-50 / neutral-900 from brand tokens, applied via Tailwind classes on <body>. */
+  }
+
+  code,
+  pre {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  }
+
+  ::selection {
+    background-color: theme('colors.brand.200');
+    color: theme('colors.brand.900');
+  }
+}

@@ -1,0 +1,346 @@
+// Venara — Prisma schema.
+// Source of truth for the data model (Brief §7). Migrations are the ONLY way schema
+// changes; never edit a shipped migration. Every tenant table carries `workspaceId`
+// and the db layer enforces scoping (Brief §7/§17).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums — mirror packages/shared/src/types.ts. Keep the two in lockstep.
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  owner
+  member
+}
+
+enum LoginMode {
+  none
+  credentials
+}
+
+enum ConnectedAppStatus {
+  connected
+  error
+  disabled
+}
+
+enum FlowStatus {
+  discovered
+  requested
+  ready
+  archived
+}
+
+enum CaptureStatus {
+  queued
+  capturing
+  done
+  failed
+}
+
+enum VideoType {
+  howto
+  marketing
+}
+
+enum VideoStatus {
+  draft
+  ready
+  failed
+}
+
+enum Freshness {
+  live
+  stale
+}
+
+enum RenderAspect {
+  RATIO_16_9 @map("16:9")
+  RATIO_9_16 @map("9:16")
+  RATIO_1_1  @map("1:1")
+}
+
+enum RenderStatus {
+  queued
+  rendering
+  done
+  failed
+}
+
+enum AgentRequestStatus {
+  planning
+  capturing
+  rendering
+  done
+  failed
+  needs_input
+}
+
+enum JobStatus {
+  queued
+  active
+  completed
+  failed
+}
+
+enum UsageEventKind {
+  capture_minutes
+  agent_run
+  render
+  regenerate
+}
+
+// ---------------------------------------------------------------------------
+// Core tenancy
+// ---------------------------------------------------------------------------
+
+model Workspace {
+  id               String   @id @default(cuid())
+  name             String
+  planId           String   @default("free")
+  stripeCustomerId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users         User[]
+  connectedApps ConnectedApp[]
+  agentRequests AgentRequest[]
+  usageEvents   UsageEvent[]
+
+  @@index([stripeCustomerId])
+}
+
+model User {
+  id          String   @id @default(cuid())
+  clerkId     String   @unique
+  workspaceId String
+  email       String
+  role        UserRole @default(owner)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([email])
+}
+
+// ---------------------------------------------------------------------------
+// Connected apps, flows, captures
+// ---------------------------------------------------------------------------
+
+model ConnectedApp {
+  id          String             @id @default(cuid())
+  workspaceId String
+  name        String
+  baseUrl     String
+  loginMode   LoginMode          @default(none)
+  // A reference to a secret in the secret store — NEVER the secret itself (Brief §17).
+  credentialsRef String?
+  // { name: string, lexicon: { term: string, say: string }[] } — pronunciation guide.
+  pronunciation  Json?
+  // Pointer to the most recent UiSnapshot.id (staleness baseline). Not an FK by design.
+  lastSnapshotId String?
+  status      ConnectedAppStatus @default(connected)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  flows           Flow[]
+  videos          Video[]
+  uiSnapshots     UiSnapshot[]
+  stalenessEvents StalenessEvent[]
+  agentRequests   AgentRequest[]
+
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model Flow {
+  id             String     @id @default(cuid())
+  connectedAppId String
+  title          String
+  intent         String?
+  // Planned/actual step script (the capture tool-set verbs, Brief §8).
+  stepsJson      Json?
+  status         FlowStatus @default(discovered)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  connectedApp ConnectedApp @relation(fields: [connectedAppId], references: [id], onDelete: Cascade)
+  captures     Capture[]
+  videos       Video[]
+
+  @@index([connectedAppId])
+  @@index([status])
+}
+
+model Capture {
+  id                  String        @id @default(cuid())
+  flowId              String
+  browserbaseSessionId String?
+  rawVideoKey         String?
+  domSnapshotKey      String?
+  visualSnapshotKey   String?
+  durationMs          Int?
+  status              CaptureStatus @default(queued)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  flow   Flow    @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  videos Video[]
+
+  @@index([flowId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Videos and renders
+// ---------------------------------------------------------------------------
+
+model Video {
+  id             String      @id @default(cuid())
+  connectedAppId String
+  flowId         String
+  captureId      String?
+  type           VideoType
+  title          String
+  status         VideoStatus @default(draft)
+  // Pointer to the current Render.id shown to the user. Not an FK by design
+  // (avoids a cyclic FK with Render.videoId).
+  currentRenderId String?
+  freshness      Freshness   @default(live)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  connectedApp ConnectedApp @relation(fields: [connectedAppId], references: [id], onDelete: Cascade)
+  flow         Flow         @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  capture      Capture?     @relation(fields: [captureId], references: [id], onDelete: SetNull)
+  renders      Render[]
+
+  @@index([connectedAppId])
+  @@index([flowId])
+  @@index([captureId])
+  @@index([freshness])
+}
+
+model Render {
+  id          String       @id @default(cuid())
+  videoId     String
+  mp4Key      String?
+  thumbKey    String?
+  aspect      RenderAspect @default(RATIO_16_9)
+  scriptJson  Json?
+  captionsKey String?
+  durationMs  Int?
+  status      RenderStatus @default(queued)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Staleness engine (Brief §11)
+// ---------------------------------------------------------------------------
+
+model UiSnapshot {
+  id             String   @id @default(cuid())
+  connectedAppId String
+  // Map of routes touched → structural signature (Brief §11).
+  routeMapJson   Json?
+  // Perceptual hashes keyed by route/region for visual diffing.
+  visualHashes   Json?
+  capturedAt     DateTime @default(now())
+
+  connectedApp ConnectedApp @relation(fields: [connectedAppId], references: [id], onDelete: Cascade)
+
+  @@index([connectedAppId])
+}
+
+model StalenessEvent {
+  id               String    @id @default(cuid())
+  connectedAppId   String
+  // Pointers to UiSnapshot.id before/after the change. Not FKs by design.
+  snapshotBeforeId String?
+  snapshotAfterId  String?
+  // Human-readable + structured diff (Brief §11).
+  diffJson         Json?
+  affectedVideoIds String[]
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  connectedApp ConnectedApp @relation(fields: [connectedAppId], references: [id], onDelete: Cascade)
+
+  @@index([connectedAppId])
+  @@index([resolvedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Conversational create agent (Brief §9)
+// ---------------------------------------------------------------------------
+
+model AgentRequest {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  connectedAppId  String
+  prompt          String
+  parsedIntentJson Json?
+  planJson        Json?
+  resultVideoId   String?
+  status          AgentRequestStatus @default(planning)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connectedApp ConnectedApp @relation(fields: [connectedAppId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([connectedAppId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Observability + usage
+// ---------------------------------------------------------------------------
+
+// Mirror of BullMQ jobs for observability (Brief §7/§13). The queue is the source
+// of execution truth; this row makes status visible to the product UI + Bull Board.
+model Job {
+  id          String    @id @default(cuid())
+  type        String
+  payloadJson Json?
+  status      JobStatus @default(queued)
+  attempts    Int       @default(0)
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([type])
+  @@index([status])
+}
+
+model UsageEvent {
+  id          String         @id @default(cuid())
+  workspaceId String
+  kind        UsageEventKind
+  quantity    Int            @default(1)
+  createdAt   DateTime       @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([kind])
+  @@index([createdAt])
+}

@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Env / secrets — never commit
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Prisma
+packages/db/prisma/migrations/dev.db*
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+Thumbs.db
+
+# Claude Code local artifacts
+.claude/
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Temp / render scratch
+tmp/
+.tmp/
+*.local
