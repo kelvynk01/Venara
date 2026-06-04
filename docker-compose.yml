@@ -1,0 +1,34 @@
+# Local development infra — Postgres + Redis.
+# Production runs these as Railway managed add-ons (Brief §4); this is for local testing.
+#   docker compose up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: venara-postgres
+    environment:
+      POSTGRES_USER: venara
+      POSTGRES_PASSWORD: venara
+      POSTGRES_DB: venara
+    ports:
+      - '5432:5432'
+    volumes:
+      - venara-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U venara']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: venara-redis
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  venara-pgdata:

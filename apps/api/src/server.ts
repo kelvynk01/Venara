@@ -13,6 +13,7 @@ import { corsOrigins, env } from './env';
 import { AppError } from './lib/errors';
 import { registerBullBoard } from './observability/bull-board';
 import { captureError } from './observability/sentry';
+import { agentRoutes } from './routes/agent';
 import { appsRoutes } from './routes/apps';
 import { capturesRoutes } from './routes/captures';
 import { devRoutes } from './routes/dev';
@@ -67,6 +68,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       await v1.register(appsRoutes);
       await v1.register(capturesRoutes);
       await v1.register(videosRoutes);
+      await v1.register(agentRoutes);
       await v1.register(devRoutes);
     },
     { prefix: API_PREFIX },

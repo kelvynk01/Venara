@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@sentry/node": "^8.42.0",
+    "@venara/agent": "*",
     "@venara/capture": "*",
     "@venara/db": "*",
+    "@venara/llm": "*",
     "@venara/render": "*",
     "@venara/shared": "*",
     "@venara/storage": "*",

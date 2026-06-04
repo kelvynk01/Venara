@@ -314,6 +314,12 @@ model AgentRequest {
   prompt          String
   parsedIntentJson Json?
   planJson        Json?
+  // Live progress steps shown on the Create surface ({label,state}[], Brief §9).
+  progressJson    Json?
+  // The single needs_input question to ask, set when status = needs_input (CONFIRM gate).
+  question        String?
+  // Human-readable failure reason when status = failed.
+  lastError       String?
   resultVideoId   String?
   status          AgentRequestStatus @default(planning)
   createdAt       DateTime           @default(now())

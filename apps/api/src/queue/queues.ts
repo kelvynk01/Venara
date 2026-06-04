@@ -20,13 +20,17 @@ export const captureQueue = new Queue(QUEUE_NAMES.capture, { connection: redisCo
 /** Phase 3: render queue — converts a capture into a watchable MP4 (Brief §10/§13). */
 export const renderQueue = new Queue(QUEUE_NAMES.render, { connection: redisConnection });
 
+/** Phase 4: agent queue — conversational create loop (Brief §9/§13). */
+export const agentQueue = new Queue(QUEUE_NAMES.agent, { connection: redisConnection });
+
 /** Every queue the API produces to (registered with Bull Board). */
-export const producerQueues: Queue[] = [noopQueue, captureQueue, renderQueue];
+export const producerQueues: Queue[] = [noopQueue, captureQueue, renderQueue, agentQueue];
 
 const queueByName: Partial<Record<QueueName, Queue>> = {
   [QUEUE_NAMES.noop]: noopQueue,
   [QUEUE_NAMES.capture]: captureQueue,
   [QUEUE_NAMES.render]: renderQueue,
+  [QUEUE_NAMES.agent]: agentQueue,
 };
 
 /** Payload every job carries so the worker can update the matching Job mirror row. */

@@ -6,8 +6,6 @@
  * a Zod schema before execution; invalid → one replan → fail. Hard step cap + wall-clock
  * budget per run (see AGENT_LIMITS) — never loop forever. Any write/payment/irreversible
  * action hits the CONFIRM gate before capture runs.
- *
- * Phase 1: types + re-exports only. The loop + planner land in Phase 4 (the agent).
  */
 export type { AgentIntent } from '@venara/shared';
 export { AGENT_LIMITS } from '@venara/shared';
@@ -19,3 +17,11 @@ export interface AgentPlan {
   needsConfirmation: boolean;
   confirmationQuestion?: string;
 }
+
+// ─── Phase functions ──────────────────────────────────────────────────────────
+
+export { planPhase } from './planner.js';
+export type { PlanPhaseInput, PlanPhaseOutput } from './planner.js';
+
+export { executePhase, buildProgressSteps, AGENT_PHASE_LABELS } from './loop.js';
+export type { ExecutePhaseInput, ExecutePhaseOutput } from './loop.js';

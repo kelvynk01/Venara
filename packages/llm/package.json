@@ -12,9 +12,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@venara/shared": "*"
+    "@anthropic-ai/sdk": "^0.55.0",
+    "@venara/capture": "*",
+    "@venara/shared": "*",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "typescript": "^5.6.3"
   }
 }

@@ -48,3 +48,4 @@ export * from './queries/jobs';
 export * from './queries/apps';
 export * from './queries/captures';
 export * from './queries/videos';
+export * from './queries/agent';

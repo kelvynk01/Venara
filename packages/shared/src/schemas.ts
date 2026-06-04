@@ -196,6 +196,47 @@ export const flowPublicSchema = z.object({
 
 export type FlowPublic = z.infer<typeof flowPublicSchema>;
 
+// ─── Conversational create agent (Phase 4, Brief §9) ─────────────────────────
+
+/** POST /v1/apps/:id/agent — start a conversational create request. */
+export const createAgentRequestSchema = z.object({
+  prompt: z.string().min(1).max(2000),
+});
+
+/** POST /v1/agent/:id/confirm — answer a needs_input confirmation (Brief §9 CONFIRM gate). */
+export const confirmAgentRequestSchema = z.object({
+  confirm: z.boolean(),
+  /** Optional clarification (e.g. "use a test address"). */
+  note: z.string().max(500).optional(),
+});
+
+/** A single live-progress line for the Create surface (never a bare spinner, Brief §9/§15). */
+export const agentProgressStepSchema = z.object({
+  label: z.string(),
+  state: z.enum(['done', 'active', 'pending']),
+});
+
+/** GET /v1/agent/:id — status + live progress + result (Brief §9/§12). */
+export const agentRequestPublicSchema = z.object({
+  id: z.string(),
+  connectedAppId: z.string(),
+  prompt: z.string(),
+  status: agentRequestStatusSchema,
+  progress: z.array(agentProgressStepSchema),
+  /** Present only when status === 'needs_input' — the single, specific question to ask. */
+  question: z.string().nullable(),
+  /** Set when the run produced a video. */
+  resultVideoId: z.string().nullable(),
+  /** A human-readable error when status === 'failed'. */
+  error: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export type CreateAgentRequestInput = z.infer<typeof createAgentRequestSchema>;
+export type ConfirmAgentRequestInput = z.infer<typeof confirmAgentRequestSchema>;
+export type AgentProgressStep = z.infer<typeof agentProgressStepSchema>;
+export type AgentRequestPublic = z.infer<typeof agentRequestPublicSchema>;
+
 /**
  * Parse and validate a process environment against a Zod schema, failing fast with
  * a readable message. Used by each app to validate its own env subset at boot —

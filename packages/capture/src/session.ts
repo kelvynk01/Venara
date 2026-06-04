@@ -137,8 +137,14 @@ export class CaptureSession {
         await performLogin(page, input.credentials);
       }
 
-      // 4. Execute the step script.
-      const execCtx: ExecutorContext = { page, sessionStartMs, beats };
+      // 4. Execute the step script. Restrict navigation to the app's own origin (SSRF guard).
+      let allowedHostname: string | undefined;
+      try {
+        allowedHostname = new URL(input.baseUrl).hostname;
+      } catch {
+        allowedHostname = undefined;
+      }
+      const execCtx: ExecutorContext = { page, sessionStartMs, beats, allowedHostname };
       for (const step of input.steps) {
         const result = await executeTool(execCtx, step);
         if (!result.ok) {

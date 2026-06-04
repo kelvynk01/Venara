@@ -37,6 +37,49 @@ export interface ExecutorContext {
   /** Epoch ms when the session began (for computing beat.atMs). */
   sessionStartMs: number;
   beats: CaptureBeat[];
+  /**
+   * Hostname of the connected app's baseUrl. `navigate` is restricted to this host
+   * (and its subdomains) — an SSRF guard so a hallucinated/adversarial plan can't reach
+   * cloud metadata, internal services, or the filesystem (Brief §17/§18).
+   */
+  allowedHostname?: string;
+}
+
+/**
+ * Reject navigations that could reach internal infrastructure (SSRF). Allows only
+ * http/https, blocks private/link-local/loopback/metadata hosts, and — when an app
+ * host is known — restricts navigation to that host and its subdomains.
+ */
+export function navigateBlockedReason(rawUrl: string, allowedHostname?: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return 'navigate blocked: invalid URL';
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    return `navigate blocked: scheme "${url.protocol}" not allowed`;
+  }
+  const host = url.hostname.toLowerCase();
+  // Block loopback, link-local (incl. cloud metadata 169.254.169.254), and RFC-1918 ranges.
+  const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  const isLinkLocal = host.startsWith('169.254.') || host.startsWith('fe80:');
+  const isPrivate =
+    host.startsWith('10.') ||
+    host.startsWith('192.168.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    host.endsWith('.internal') ||
+    host.endsWith('.local');
+  if (isLoopback || isLinkLocal || isPrivate) {
+    return 'navigate blocked: host is private/link-local';
+  }
+  if (allowedHostname) {
+    const allowed = allowedHostname.toLowerCase();
+    if (host !== allowed && !host.endsWith(`.${allowed}`)) {
+      return 'navigate blocked: host not in the connected app origin';
+    }
+  }
+  return null;
 }
 
 // ─── Target resolution helpers ───────────────────────────────────────────────
@@ -87,6 +130,8 @@ async function resolveTarget(page: Page, target: string) {
 // ─── Individual executors ────────────────────────────────────────────────────
 
 async function execNavigate(ctx: ExecutorContext, args: NavigateArgs): Promise<CaptureStepResult> {
+  const blocked = navigateBlockedReason(args.url, ctx.allowedHostname);
+  if (blocked) return { ok: false, error: blocked };
   const timeout = args.timeout ?? DEFAULT_ACTION_TIMEOUT_MS;
   await ctx.page.goto(args.url, { timeout, waitUntil: 'domcontentloaded' });
   return { ok: true };

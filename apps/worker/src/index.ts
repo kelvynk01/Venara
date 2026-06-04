@@ -10,6 +10,7 @@ import { QUEUE_NAMES } from '@venara/shared';
 import { prisma, updateJobStatus } from '@venara/db';
 import { redisConnection } from './connection';
 import { env } from './env';
+import { processAgent } from './processors/agent';
 import { processCapture } from './processors/capture';
 import { processNoop } from './processors/noop';
 import { processRender } from './processors/render';
@@ -55,6 +56,7 @@ function startWorker(queue: string, processor: (job: Job) => Promise<unknown>): 
 workers.push(startWorker(QUEUE_NAMES.noop, processNoop));
 workers.push(startWorker(QUEUE_NAMES.capture, processCapture));
 workers.push(startWorker(QUEUE_NAMES.render, processRender));
+workers.push(startWorker(QUEUE_NAMES.agent, processAgent));
 
 async function shutdown(signal: string): Promise<void> {
   // eslint-disable-next-line no-console

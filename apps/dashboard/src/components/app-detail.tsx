@@ -10,7 +10,7 @@
  */
 import { useAuth } from '@clerk/nextjs';
 import { BRAND, type ConnectedAppPublic, type ConnectedAppStatus } from '@venara/shared';
-import { ExternalLink, Globe, Trash2 } from 'lucide-react';
+import { ExternalLink, Globe, Sparkles, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -149,16 +149,30 @@ export function AppDetail({ id }: { id: string }): JSX.Element {
           </div>
         </div>
 
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={disconnecting}
-          onClick={() => void handleDisconnect()}
-          className="shrink-0 text-danger hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
-        >
-          <Trash2 className="h-4 w-4" aria-hidden />
-          {disconnecting ? 'Disconnecting…' : 'Disconnect'}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={`/apps/${id}/create`}
+            className={cn(
+              'inline-flex h-8 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-colors',
+              'bg-brand-600 text-white hover:bg-brand-700',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2',
+            )}
+          >
+            <Sparkles className="h-3.5 w-3.5" aria-hidden />
+            Create with AI
+          </Link>
+
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={disconnecting}
+            onClick={() => void handleDisconnect()}
+            className="text-danger hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden />
+            {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+          </Button>
+        </div>
       </div>
 
       {disconnectError && (

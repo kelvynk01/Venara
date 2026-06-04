@@ -3,7 +3,11 @@
  * Secrets only ever come from env; a missing/invalid one fails fast and loud.
  */
 import { parseEnv } from '@venara/shared';
+import { loadEnvFiles } from '@venara/shared/load-env';
 import { z } from 'zod';
+
+// Load .env.local + .env before reading process.env (tsx apps don't auto-load like Next).
+loadEnvFiles();
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
