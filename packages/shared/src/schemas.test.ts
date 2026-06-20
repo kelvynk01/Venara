@@ -26,15 +26,13 @@ describe('connectAppSchema', () => {
     expect(connectAppSchema.safeParse({ ...base, authorized: false }).success).toBe(false);
   });
 
-  it('requires credentials when loginMode is credentials', () => {
+  it('accepts loginMode=session with no credentials (handoff happens later, ADR-001)', () => {
+    const r = connectAppSchema.safeParse({ ...base, loginMode: 'session' });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects the retired credentials login mode', () => {
     expect(connectAppSchema.safeParse({ ...base, loginMode: 'credentials' }).success).toBe(false);
-    expect(
-      connectAppSchema.safeParse({
-        ...base,
-        loginMode: 'credentials',
-        credentials: { username: 'u', password: 'p' },
-      }).success,
-    ).toBe(true);
   });
 });
 

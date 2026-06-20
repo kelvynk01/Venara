@@ -175,3 +175,9 @@ export interface CaptureProvider {
 
 export { CaptureSession } from './session';
 export { executeTool } from './tools';
+export {
+  startAuthHandoff,
+  harvestAuthSession,
+  endAuthSession,
+  type AuthHandoffSession,
+} from './auth';

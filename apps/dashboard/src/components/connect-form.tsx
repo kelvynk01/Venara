@@ -15,8 +15,8 @@ import { Button } from '@/components/ui/button';
 import { ApiRequestError, apiFetch } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
-/** Login mode selection. */
-type LoginMode = 'none' | 'credentials';
+/** Login mode selection (ADR-001). */
+type LoginMode = 'none' | 'session';
 
 /** Per-field error map returned by the API (422 details). */
 type FieldErrors = Partial<Record<string, string>>;
@@ -48,8 +48,6 @@ export function ConnectForm(): JSX.Element {
   const [baseUrl, setBaseUrl] = useState('');
   const [name, setName] = useState('');
   const [loginMode, setLoginMode] = useState<LoginMode>('none');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   const [authorized, setAuthorized] = useState(false);
 
   // --- submission state ---
@@ -65,10 +63,6 @@ export function ConnectForm(): JSX.Element {
     const errors: FieldErrors = {};
     if (!isValidUrl(baseUrl)) {
       errors['baseUrl'] = 'Enter a valid URL starting with http:// or https://';
-    }
-    if (loginMode === 'credentials') {
-      if (!username.trim()) errors['username'] = 'Username is required';
-      if (!password.trim()) errors['password'] = 'Password is required';
     }
     if (!authorized) {
       errors['authorized'] = 'You must confirm you own or are authorised to capture this app';
@@ -93,14 +87,13 @@ export function ConnectForm(): JSX.Element {
         loginMode,
         authorized: true as const,
       };
-      if (loginMode === 'credentials') {
-        body['credentials'] = { username: username.trim(), password };
-      }
       const app = await apiFetch<ConnectedAppPublic>('/v1/apps', token, {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      router.push(`/apps/${app.id}`);
+      // For session apps, land on the detail page with the login handoff primed so the
+      // user signs into their own app immediately (ADR-001).
+      router.push(loginMode === 'session' ? `/apps/${app.id}?connect=1` : `/apps/${app.id}`);
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setApiError(err.message);
@@ -170,74 +163,27 @@ export function ConnectForm(): JSX.Element {
             name="loginMode"
             value="none"
             checked={loginMode === 'none'}
-            label="No login needed"
-            description="Public app or already signed in"
+            label="Public app — no login"
+            description="Anyone can view it, or it's already signed in"
             onChange={() => setLoginMode('none')}
           />
           <RadioOption
-            id="login-credentials"
+            id="login-session"
             name="loginMode"
-            value="credentials"
-            checked={loginMode === 'credentials'}
-            label="Use test credentials"
-            description={`${BRAND.name} will log in before recording`}
-            onChange={() => setLoginMode('credentials')}
+            value="session"
+            checked={loginMode === 'session'}
+            label="Sign in to your app"
+            description="You log into your real app next — including SSO / 2FA"
+            onChange={() => setLoginMode('session')}
           />
         </div>
 
-        {loginMode === 'credentials' && (
-          <div className="space-y-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-            <div className="space-y-1">
-              <label htmlFor="username" className="block text-sm font-medium text-neutral-700">
-                Username or email <span aria-hidden className="text-danger">*</span>
-              </label>
-              <input
-                id="username"
-                type="text"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => {
-                  setUsername(e.target.value);
-                  setFieldErrors((prev) => ({ ...prev, username: undefined }));
-                }}
-                aria-describedby={fieldErrors['username'] ? 'username-error' : undefined}
-                aria-invalid={fieldErrors['username'] !== undefined}
-                className={cn(inputBase, fieldErrors['username'] ? inputError : inputDefault)}
-              />
-              {fieldErrors['username'] && (
-                <p id="username-error" className={errorText}>
-                  {fieldErrors['username']}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <label htmlFor="password" className="block text-sm font-medium text-neutral-700">
-                Password <span aria-hidden className="text-danger">*</span>
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setFieldErrors((prev) => ({ ...prev, password: undefined }));
-                }}
-                aria-describedby={fieldErrors['password'] ? 'password-error' : undefined}
-                aria-invalid={fieldErrors['password'] !== undefined}
-                className={cn(inputBase, fieldErrors['password'] ? inputError : inputDefault)}
-              />
-              {fieldErrors['password'] && (
-                <p id="password-error" className={errorText}>
-                  {fieldErrors['password']}
-                </p>
-              )}
-            </div>
-
-            <p className="text-xs text-neutral-500">
-              Credentials are stored as encrypted references and never returned by the API
-              (Brief §17).
+        {loginMode === 'session' && (
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+            <p className="text-xs text-neutral-600">
+              After you connect, {BRAND.name} opens your app&apos;s own login in a secure browser
+              and you sign in there — with Google, 2FA, passkeys, whatever you normally use.
+              {' '}{BRAND.name} keeps the resulting session, <strong>never your password</strong>.
             </p>
           </div>
         )}

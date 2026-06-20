@@ -21,3 +21,24 @@ export interface DiffResult {
   /** Human-readable summary for the "what changed" UI. */
   summary: string;
 }
+
+/**
+ * ADR-001 — session-auth guard for the recapture scheduler (to honor when this engine is
+ * built in Phase 6):
+ *
+ *   Before scheduling an automated re-snapshot/recapture for a ConnectedApp, SKIP any app
+ *   with `loginMode === 'session' && sessionStatus !== 'active'`. An expired session can't
+ *   authenticate unattended; scheduling would only burn a Browserbase session against a
+ *   login wall. The user is already prompted to reconnect on the app page; recaptures
+ *   resume automatically once `sessionStatus` returns to `active`.
+ *
+ * Runtime safety net (already live): if a session expires mid-run, CaptureSession returns
+ * `outcome: 'needs_reauth'`, and the capture/agent workers set `sessionStatus = 'expired'`
+ * and pause rather than fail-retrying. See apps/worker/src/processors/capture.ts.
+ */
+export function isRecaptureEligible(app: {
+  loginMode: 'none' | 'session';
+  sessionStatus?: 'active' | 'expired' | null;
+}): boolean {
+  return app.loginMode !== 'session' || app.sessionStatus === 'active';
+}

@@ -73,21 +73,31 @@ export async function deleteSecret(scope: WorkspaceScope, ref: string): Promise<
   await prisma.secret.deleteMany({ where: { id: ref, workspaceId: scope.workspaceId } });
 }
 
-/** Convenience: connected-app credentials are stored as a JSON string under one secret. */
-export interface AppCredentials {
-  username: string;
-  password: string;
+/**
+ * A connected app's authenticated session (ADR-001) is stored as a JSON `storageState`
+ * (cookies + per-origin localStorage) under one encrypted secret — never a password.
+ */
+export interface StoredSessionState {
+  cookies: unknown[];
+  origins: unknown[];
 }
 
-export function serializeCredentials(creds: AppCredentials): string {
-  return JSON.stringify(creds);
+export function serializeSessionState(state: StoredSessionState): string {
+  return JSON.stringify(state);
 }
 
-export function parseCredentials(plaintext: string): AppCredentials {
+/**
+ * Parse a decrypted, stored session. Throws a SAFE error (never echoing the value) on
+ * corrupt input or the wrong encryption key — callers treat this as "needs re-auth".
+ */
+export function parseSessionState(plaintext: string): StoredSessionState {
   try {
-    return JSON.parse(plaintext) as AppCredentials;
+    const v = JSON.parse(plaintext) as { cookies?: unknown; origins?: unknown };
+    if (!Array.isArray(v.cookies) || !Array.isArray(v.origins)) {
+      throw new Error('unexpected shape');
+    }
+    return { cookies: v.cookies, origins: v.origins };
   } catch {
-    // Never include the (possibly partial-plaintext) value in the error.
-    throw new Error('Failed to parse stored credentials — possible key mismatch or corruption.');
+    throw new Error('Failed to parse stored session — possible key mismatch or corruption.');
   }
 }

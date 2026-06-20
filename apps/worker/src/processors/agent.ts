@@ -46,6 +46,7 @@ import {
   updateAgentRequest,
   getConnectedApp,
   resolveSecret,
+  parseSessionState,
   setAppSession,
   createFlow,
   createCapture,
@@ -305,8 +306,13 @@ async function runExecutePhase(
       await setAppSession(scope, app.id, { sessionStatus: 'expired' }).catch(() => undefined);
       throw new Error('NEEDS_REAUTH: reconnect this app to refresh its login, then try again.');
     }
-    // NOTE: session values are NEVER logged (Brief §17).
-    sessionState = JSON.parse(plaintext) as import('@venara/capture').CaptureSessionState;
+    try {
+      // NOTE: session values are NEVER logged (Brief §17).
+      sessionState = parseSessionState(plaintext) as unknown as import('@venara/capture').CaptureSessionState;
+    } catch {
+      await setAppSession(scope, app.id, { sessionStatus: 'expired' }).catch(() => undefined);
+      throw new Error('NEEDS_REAUTH: reconnect this app to refresh its login, then try again.');
+    }
   }
 
   // ── Extract pronunciation lexicon ─────────────────────────────────────────

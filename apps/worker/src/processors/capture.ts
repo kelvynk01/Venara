@@ -27,6 +27,7 @@ import { CaptureSession } from '@venara/capture';
 import type { CaptureStep, CaptureSessionState } from '@venara/capture';
 import {
   getCaptureWithApp,
+  parseSessionState,
   resolveSecret,
   setAppSession,
   updateCapture,
@@ -82,7 +83,7 @@ export async function processCapture(job: Job<CaptureJobData>): Promise<{ ok: tr
       }
       try {
         // NOTE: session values are NEVER logged (Brief §17).
-        sessionState = JSON.parse(plaintext) as CaptureSessionState;
+        sessionState = parseSessionState(plaintext) as unknown as CaptureSessionState;
       } catch {
         return await pauseForReauth(scope, app.id, captureId, jobRecordId, job.attemptsMade);
       }

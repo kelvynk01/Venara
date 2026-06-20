@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { AppFlows } from '@/components/app-flows';
 import { AppVideos } from '@/components/app-videos';
+import { AuthHandoff } from '@/components/auth-handoff';
 import { ErrorState } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,7 +36,7 @@ const STATUS_DISPLAY: Record<ConnectedAppStatus, { label: string; className: str
 
 const LOGIN_MODE_LABEL: Record<ConnectedAppPublic['loginMode'], string> = {
   none: 'No login',
-  credentials: 'Test credentials',
+  session: 'Signed in',
 };
 
 export function AppDetail({ id }: { id: string }): JSX.Element {
@@ -186,6 +187,19 @@ export function AppDetail({ id }: { id: string }): JSX.Element {
 
       {/* Divider */}
       <hr className="my-8 border-neutral-200" />
+
+      {/* Session auth (ADR-001): prompt the login handoff until a session is active. */}
+      {app.loginMode === 'session' && app.sessionStatus !== 'active' && (
+        <section className="mb-8">
+          {app.sessionStatus === 'expired' && (
+            <p className="mb-3 text-sm text-neutral-600">
+              This app&apos;s login expired, so {BRAND.name} paused its videos. Sign in again to
+              resume keeping them current.
+            </p>
+          )}
+          <AuthHandoff appId={id} onComplete={() => void load()} />
+        </section>
+      )}
 
       {/* Flows section (Phase 3) */}
       <AppFlows appId={id} />

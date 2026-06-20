@@ -82,9 +82,23 @@ export const connectedAppPublicSchema = z.object({
   createdAt: z.string(),
 });
 
+/** POST /v1/apps/:id/auth/start response — the embeddable Live View for the login handoff (ADR-001). */
+export const startAuthResponseSchema = z.object({
+  sessionId: z.string(),
+  liveViewUrl: z.string().url(),
+  expiresAt: z.number(),
+});
+
+/** POST /v1/apps/:id/auth/complete — harvest the session the user just established. */
+export const completeAuthSchema = z.object({
+  sessionId: z.string().min(1),
+});
+
 export type ConnectAppInput = z.infer<typeof connectAppSchema>;
 export type UpdateAppInput = z.infer<typeof updateAppSchema>;
 export type ConnectedAppPublic = z.infer<typeof connectedAppPublicSchema>;
+export type StartAuthResponse = z.infer<typeof startAuthResponseSchema>;
+export type CompleteAuthInput = z.infer<typeof completeAuthSchema>;
 
 /** Standard API error envelope returned by the Fastify error handler. */
 export const apiErrorSchema = z.object({
