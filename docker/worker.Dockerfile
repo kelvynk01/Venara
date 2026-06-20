@@ -5,8 +5,9 @@ WORKDIR /app
 
 # FFmpeg + DejaVu fonts are required by the render workers.
 # fonts-dejavu-core provides DejaVuSans-Bold.ttf used by the FFmpeg drawtext filter.
+# openssl/ca-certificates are required by Prisma's query engine (Debian 12 / OpenSSL 3.x).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core \
+  && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 COPY . .
