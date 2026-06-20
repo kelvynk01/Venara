@@ -10,7 +10,7 @@
 import { useAuth } from '@clerk/nextjs';
 import { BRAND, type StartAuthResponse } from '@venara/shared';
 import { Loader2, ShieldCheck } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ApiRequestError, apiFetch } from '@/lib/api';
 
@@ -30,14 +30,42 @@ export function AuthHandoff({
 }): JSX.Element {
   const { getToken } = useAuth();
   const [state, setState] = useState<HandoffState>({ phase: 'idle' });
+  // The live Browserbase session, tracked so we can release it on restart/unmount and not
+  // leak concurrency slots (the plan's concurrent-session quota is small).
+  const activeSessionId = useRef<string | null>(null);
+
+  async function releaseSession(sessionId: string, token: string | null, keepalive = false): Promise<void> {
+    await apiFetch(`/v1/apps/${appId}/auth/cancel`, token, {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+      ...(keepalive ? { keepalive: true } : {}),
+    }).catch(() => undefined);
+  }
+
+  // Best-effort release if the user navigates away mid-login.
+  useEffect(() => {
+    return () => {
+      const sid = activeSessionId.current;
+      if (!sid) return;
+      activeSessionId.current = null;
+      void getToken().then((token) => releaseSession(sid, token, true));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- release-on-unmount only.
+  }, []);
 
   async function start(): Promise<void> {
     setState({ phase: 'starting' });
     try {
       const token = await getToken();
+      // Release any prior handoff session first so repeated tries don't stack up slots.
+      if (activeSessionId.current) {
+        await releaseSession(activeSessionId.current, token);
+        activeSessionId.current = null;
+      }
       const session = await apiFetch<StartAuthResponse>(`/v1/apps/${appId}/auth/start`, token, {
         method: 'POST',
       });
+      activeSessionId.current = session.sessionId;
       setState({ phase: 'live', session });
     } catch (err) {
       setState({ phase: 'error', message: errMessage(err) });
@@ -52,6 +80,8 @@ export function AuthHandoff({
         method: 'POST',
         body: JSON.stringify({ sessionId: session.sessionId }),
       });
+      // completeAppAuth releases the session server-side; don't double-cancel on unmount.
+      activeSessionId.current = null;
       onComplete();
     } catch (err) {
       // "No login detected" → let the user keep signing in and try again.

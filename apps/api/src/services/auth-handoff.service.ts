@@ -48,6 +48,21 @@ export async function startAppAuth(
   };
 }
 
+/**
+ * Cancel an in-flight handoff session — releases the hosted browser so it stops counting
+ * against the concurrent-session quota when the user abandons or restarts the login.
+ */
+export async function cancelAppAuth(
+  scope: WorkspaceScope,
+  appId: string,
+  sessionId: string,
+): Promise<{ ok: true }> {
+  const app = await getConnectedApp(scope, appId);
+  if (!app) throw new NotFoundError('Connected app not found.');
+  await endAuthSession(sessionId).catch(() => undefined);
+  return { ok: true };
+}
+
 export async function completeAppAuth(
   scope: WorkspaceScope,
   appId: string,

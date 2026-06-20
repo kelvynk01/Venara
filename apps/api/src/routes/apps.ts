@@ -56,4 +56,12 @@ export async function appsRoutes(app: FastifyInstance): Promise<void> {
     const { sessionId } = completeAuthSchema.parse(req.body);
     return authHandoffService.completeAppAuth(scope, id, sessionId);
   });
+
+  // Release an abandoned/superseded handoff session so it frees its concurrency slot.
+  app.post('/apps/:id/auth/cancel', { preHandler: authenticate }, async (req) => {
+    const scope = await getScope(req);
+    const { id } = req.params as { id: string };
+    const { sessionId } = completeAuthSchema.parse(req.body);
+    return authHandoffService.cancelAppAuth(scope, id, sessionId);
+  });
 }

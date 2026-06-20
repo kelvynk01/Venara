@@ -36,8 +36,12 @@ export interface AuthHandoffSession {
   expiresAt: number;
 }
 
-/** How long an interactive login session may stay open before Browserbase reaps it. */
-const AUTH_SESSION_TIMEOUT_SECONDS = 600; // 10 minutes
+/**
+ * How long an interactive login session may stay open before Browserbase reaps it.
+ * Kept tight because these sessions count against the (small) concurrent-session quota —
+ * an abandoned login must free its slot quickly. 5 minutes is plenty to sign in.
+ */
+const AUTH_SESSION_TIMEOUT_SECONDS = 300;
 
 /**
  * Start an interactive login session: open a NON-recording hosted browser on the app's
