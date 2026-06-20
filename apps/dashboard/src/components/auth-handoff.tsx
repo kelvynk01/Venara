@@ -101,6 +101,11 @@ export function AuthHandoff({
               {BRAND.name} will open your app&apos;s real login in a secure browser. Sign in
               normally — {BRAND.name} keeps the session, never your password.
             </p>
+            {state.phase === 'starting' && (
+              <p className="mt-2 text-xs text-neutral-500">
+                Starting a secure browser — this can take up to a minute the first time.
+              </p>
+            )}
             <Button
               className="mt-3"
               size="sm"
@@ -109,7 +114,7 @@ export function AuthHandoff({
             >
               {state.phase === 'starting' ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Opening…
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Opening secure browser…
                 </>
               ) : (
                 'Open login'
