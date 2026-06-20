@@ -25,10 +25,13 @@ export async function apiFetch<T>(
   token: string | null,
   init?: RequestInit,
 ): Promise<T> {
+  // Only declare a JSON content-type when we actually send a body — Fastify rejects a
+  // POST that advertises application/json with an empty body (e.g. body-less action calls).
+  const hasBody = init?.body != null;
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
