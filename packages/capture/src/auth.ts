@@ -56,6 +56,10 @@ export async function startAuthHandoff(baseUrl: string): Promise<AuthHandoffSess
     ...(projectId ? { projectId } : {}),
     keepAlive: true, // stay open while the human logs in
     timeout: AUTH_SESSION_TIMEOUT_SECONDS,
+    // Route through Browserbase's residential proxy so the target app sees a normal visitor.
+    // Many apps silently drop data-center/bot IPs, which surfaces as ERR_TIMED_OUT ("site
+    // can't be reached") in the Live View. Residential IPs avoid that.
+    proxies: true,
     browserSettings: { recordSession: false }, // NEVER record the login (Brief §17, ADR-001)
   });
 
