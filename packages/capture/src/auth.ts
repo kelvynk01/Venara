@@ -59,14 +59,13 @@ export async function startAuthHandoff(baseUrl: string): Promise<AuthHandoffSess
     browserSettings: { recordSession: false }, // NEVER record the login (Brief §17, ADR-001)
   });
 
-  // Point the browser at the app's login. Use waitUntil 'commit' (fires as soon as the
-  // navigation starts) instead of waiting for a full load, so we return the Live View URL
-  // quickly — the page finishes loading live in the embedded view the user is watching.
+  // Point the browser at the app's login and WAIT for it to actually load before detaching —
+  // detaching mid-navigation leaves the embedded browser on a "site can't be reached" error.
   try {
     const browser = await chromium.connectOverCDP(session.connectUrl);
     const context = browser.contexts()[0] ?? (await browser.newContext());
     const page = context.pages()[0] ?? (await context.newPage());
-    await page.goto(baseUrl, { waitUntil: 'commit', timeout: 20_000 }).catch(() => undefined);
+    await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 45_000 }).catch(() => undefined);
     await browser.close(); // detach Playwright; keepAlive holds the session open
   } catch {
     // Non-fatal: the Live View still opens; the user can navigate to login themselves.
