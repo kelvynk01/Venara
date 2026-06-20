@@ -12,7 +12,7 @@
  * are NEVER logged here (Brief §17).
  */
 import { CaptureSession } from '@venara/capture';
-import type { CaptureCredentials, CaptureSessionResult } from '@venara/capture';
+import type { CaptureSessionResult, CaptureSessionState } from '@venara/capture';
 import { getLlm, type AgentIntentOutput, type AgentPlanOutput, type NarrationOutput } from '@venara/llm';
 import { AGENT_LIMITS } from '@venara/shared';
 import type { AgentProgressStep } from '@venara/shared';
@@ -51,8 +51,8 @@ export interface ExecutePhaseInput {
   intent: AgentIntentOutput;
   /** App base URL (from ConnectedApp.baseUrl). */
   baseUrl: string;
-  /** Resolved plaintext credentials — NEVER log these (Brief §17). */
-  credentials?: CaptureCredentials;
+  /** Restored auth session for loginMode=session apps — NEVER log this (Brief §17, ADR-001). */
+  sessionState?: CaptureSessionState;
   /** App pronunciation lexicon for narration (safe to pass to LLM). */
   lexicon?: import('@venara/llm').LexiconEntry[];
 }
@@ -74,7 +74,7 @@ export interface ExecutePhaseOutput {
  * was bypassed (belt-and-suspenders, Brief §9).
  */
 export async function executePhase(input: ExecutePhaseInput): Promise<ExecutePhaseOutput> {
-  const { plan, baseUrl, credentials, lexicon = [] } = input;
+  const { plan, baseUrl, sessionState, lexicon = [] } = input;
 
   // Defensive step-cap check (primary enforcement is in planPhase/planSteps schema).
   if (plan.steps.length > AGENT_LIMITS.maxSteps) {
@@ -93,7 +93,7 @@ export async function executePhase(input: ExecutePhaseInput): Promise<ExecutePha
   const capturePromise = session.run({
     baseUrl,
     steps: plan.steps,
-    credentials,
+    sessionState,
     // Convert the wall-clock budget remainder to seconds for the Browserbase timeout.
     timeoutSeconds: Math.max(
       30,

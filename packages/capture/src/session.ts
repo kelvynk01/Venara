@@ -18,8 +18,8 @@ import { chromium } from 'playwright-core';
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 import type {
   CaptureBeat,
-  CaptureCredentials,
   CaptureSessionResult,
+  CaptureSessionState,
   CaptureStep,
 } from './index';
 import { executeTool, type ExecutorContext } from './tools';
@@ -36,48 +36,66 @@ function getBrowserbaseProjectId(): string | undefined {
   return process.env['BROWSERBASE_PROJECT_ID'] ?? undefined;
 }
 
-// ─── Login helper ─────────────────────────────────────────────────────────────
+// ─── Auth session helpers (ADR-001) ────────────────────────────────────────────
 
 /**
- * Best-effort login: fill username + password by role/label (Brief §8).
- * Any failure is silently swallowed — the session will continue and likely fail
- * at a later assert or navigation, giving a cleaner error than crashing here.
- * Credential values are NEVER logged (Brief §17).
+ * Restore a previously-captured auth session into the browser context BEFORE navigating:
+ * cookies via addCookies, and per-origin localStorage via an init script that runs before
+ * the page's own scripts. Venara never holds a password — only this session state.
+ * Session values are NEVER logged (Brief §17).
  */
-async function performLogin(page: Page, creds: CaptureCredentials): Promise<void> {
+async function applySessionState(
+  context: BrowserContext,
+  state: CaptureSessionState,
+): Promise<void> {
+  if (state.cookies.length > 0) {
+    // storageState cookies carry domain+path, so they apply without a target URL.
+    await context.addCookies(state.cookies).catch(() => undefined);
+  }
+  for (const { origin, localStorage } of state.origins) {
+    if (localStorage.length === 0) continue;
+    // Seed localStorage for this origin before any page script reads it.
+    await context
+      .addInitScript(
+        ({ originArg, entries }: { originArg: string; entries: Array<{ name: string; value: string }> }) => {
+          // Runs in the browser; reference globals via globalThis so this file needs no DOM lib.
+          const w = globalThis as unknown as {
+            location: { origin: string };
+            localStorage: { setItem(k: string, v: string): void };
+          };
+          if (w.location.origin !== originArg) return;
+          for (const { name, value } of entries) {
+            try {
+              w.localStorage.setItem(name, value);
+            } catch {
+              /* storage may be unavailable; ignore */
+            }
+          }
+        },
+        { originArg: origin, entries: localStorage },
+      )
+      .catch(() => undefined);
+  }
+}
+
+/**
+ * Best-effort check that the restored session is still authenticated.
+ * Conservative: only reports `needs_reauth` on a STRONG signal (a visible password field
+ * or a URL that clearly landed on a login/sign-in page), so we never falsely pause a
+ * working app. Any error → assume authenticated and let the capture proceed.
+ */
+async function probeAuthenticated(page: Page): Promise<boolean> {
   try {
-    // Common username field selectors — try accessible label first, then role, then selector.
-    const userField =
-      (await page.getByLabel(/username|email|user/i).count()) > 0
-        ? page.getByLabel(/username|email|user/i).first()
-        : (await page.getByRole('textbox', { name: /username|email|user/i }).count()) > 0
-          ? page.getByRole('textbox', { name: /username|email|user/i }).first()
-          : page.locator('input[name="username"], input[name="email"], input[type="email"]').first();
-
-    await userField.fill(creds.username, { timeout: 10_000 });
-
-    const pwField =
-      (await page.getByLabel(/password|pass/i).count()) > 0
-        ? page.getByLabel(/password|pass/i).first()
-        : page.locator('input[type="password"]').first();
-
-    // NOTE: creds.password is intentionally NOT included in any log line (Brief §17).
-    await pwField.fill(creds.password, { timeout: 10_000 });
-
-    // Submit — try a submit button first, then Enter.
-    const submitBtn = page.getByRole('button', { name: /sign in|log in|login|submit/i });
-    if ((await submitBtn.count()) > 0) {
-      await submitBtn.first().click({ timeout: 10_000 });
-    } else {
-      await pwField.press('Enter');
-    }
-
-    // Wait briefly for navigation after login.
-    await page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+    const passwordVisible = await page
+      .locator('input[type="password"]')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const onLoginUrl = /\/(login|signin|sign-in|sso)(\/|\?|#|$)/.test(page.url().toLowerCase());
+    // Authenticated unless we see a strong login-wall signal.
+    return !(passwordVisible || onLoginUrl);
   } catch {
-    // Best-effort: never throw; the main session will reflect auth failure naturally.
-    // Do NOT log any part of the credentials here (Brief §17).
-    console.warn('[capture] login step encountered an issue — continuing anyway');
+    return true;
   }
 }
 
@@ -86,7 +104,8 @@ async function performLogin(page: Page, creds: CaptureCredentials): Promise<void
 export interface CaptureSessionInput {
   baseUrl: string;
   steps: CaptureStep[];
-  credentials?: CaptureCredentials;
+  /** A previously-captured auth session to restore (loginMode=session, ADR-001). */
+  sessionState?: CaptureSessionState;
   /** Override session timeout in seconds (default 300). */
   timeoutSeconds?: number;
 }
@@ -128,16 +147,35 @@ export class CaptureSession {
       // 2. Connect Playwright to the Browserbase CDP endpoint.
       browser = await chromium.connectOverCDP(connectUrl);
       context = browser.contexts()[0] ?? (await browser.newContext());
-      page = context.pages()[0] ?? (await context.newPage());
 
-      // 3. Optional login (before running the user's step script).
-      if (input.credentials) {
-        // Navigate to base URL first so the login form is present.
-        await page.goto(input.baseUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-        await performLogin(page, input.credentials);
+      // 3. Restore the captured auth session BEFORE creating the page, so cookies +
+      //    localStorage are present on the first navigation (ADR-001).
+      if (input.sessionState) {
+        await applySessionState(context, input.sessionState);
       }
 
-      // 4. Execute the step script. Restrict navigation to the app's own origin (SSRF guard).
+      page = context.pages()[0] ?? (await context.newPage());
+
+      // 4. For session-auth apps, land on the app and confirm we're still logged in.
+      //    A login wall → short-circuit to `needs_reauth` (the caller pauses + prompts).
+      if (input.sessionState) {
+        await page.goto(input.baseUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        const authed = await probeAuthenticated(page);
+        if (!authed) {
+          const durationMs = Date.now() - sessionStartMs;
+          await this._releaseSession(bbSessionId);
+          return {
+            outcome: 'needs_reauth',
+            browserbaseSessionId: bbSessionId,
+            domSnapshot: Buffer.from(await page.content(), 'utf-8'),
+            visualSnapshot: Buffer.alloc(0),
+            beats,
+            durationMs,
+          };
+        }
+      }
+
+      // 5. Execute the step script. Restrict navigation to the app's own origin (SSRF guard).
       let allowedHostname: string | undefined;
       try {
         allowedHostname = new URL(input.baseUrl).hostname;
@@ -177,6 +215,7 @@ export class CaptureSession {
       const recordingPlaylistUrl = await this._retrieveRecordingPlaylist(bbSessionId);
 
       return {
+        outcome: 'ok',
         browserbaseSessionId: bbSessionId,
         domSnapshot,
         visualSnapshot,

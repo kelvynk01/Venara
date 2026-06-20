@@ -26,7 +26,14 @@ enum UserRole {
 
 enum LoginMode {
   none
-  credentials
+  // `session`: the user logged into their own app via the interactive handoff and Venara
+  // holds an authenticated browser session (storageState), never a password (ADR-001).
+  session
+}
+
+enum SessionStatus {
+  active
+  expired
 }
 
 enum ConnectedAppStatus {
@@ -163,7 +170,12 @@ model ConnectedApp {
   baseUrl     String
   loginMode   LoginMode          @default(none)
   // A reference to a secret in the secret store — NEVER the secret itself (Brief §17).
+  // For loginMode=session this holds the encrypted storageState ref (ADR-001).
   credentialsRef String?
+  // Session lifecycle (loginMode=session): when the auth handoff captured the session,
+  // and whether it is still usable. `expired` pauses recaptures until the user reconnects.
+  sessionCapturedAt DateTime?
+  sessionStatus     SessionStatus?
   // { name: string, lexicon: { term: string, say: string }[] } — pronunciation guide.
   pronunciation  Json?
   // Pointer to the most recent UiSnapshot.id (staleness baseline). Not an FK by design.

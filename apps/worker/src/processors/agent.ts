@@ -46,7 +46,7 @@ import {
   updateAgentRequest,
   getConnectedApp,
   resolveSecret,
-  parseCredentials,
+  setAppSession,
   createFlow,
   createCapture,
   updateCapture,
@@ -293,14 +293,20 @@ async function runExecutePhase(
     ) as unknown as import('@prisma/client').Prisma.InputJsonValue,
   });
 
-  // ── Resolve credentials ────────────────────────────────────────────────────
-  let credentials: { username: string; password: string } | undefined;
-  if (app.loginMode === 'credentials' && app.credentialsRef) {
-    const plaintext = await resolveSecret(scope, app.credentialsRef);
-    if (plaintext) {
-      credentials = parseCredentials(plaintext);
-      // NOTE: credentials values are NEVER logged (Brief §17).
+  // ── Resolve the captured auth session (loginMode=session, ADR-001) ─────────
+  let sessionState: import('@venara/capture').CaptureSessionState | undefined;
+  if (app.loginMode === 'session') {
+    if (app.sessionStatus !== 'active' || !app.credentialsRef) {
+      await setAppSession(scope, app.id, { sessionStatus: 'expired' }).catch(() => undefined);
+      throw new Error('NEEDS_REAUTH: reconnect this app to refresh its login, then try again.');
     }
+    const plaintext = await resolveSecret(scope, app.credentialsRef);
+    if (!plaintext) {
+      await setAppSession(scope, app.id, { sessionStatus: 'expired' }).catch(() => undefined);
+      throw new Error('NEEDS_REAUTH: reconnect this app to refresh its login, then try again.');
+    }
+    // NOTE: session values are NEVER logged (Brief §17).
+    sessionState = JSON.parse(plaintext) as import('@venara/capture').CaptureSessionState;
   }
 
   // ── Extract pronunciation lexicon ─────────────────────────────────────────
@@ -315,9 +321,15 @@ async function runExecutePhase(
     plan,
     intent,
     baseUrl: app.baseUrl,
-    credentials,
+    sessionState,
     lexicon,
   });
+
+  // Session expired mid-run → mark for reconnect and fail with a clear message.
+  if (captureResult.outcome === 'needs_reauth') {
+    await setAppSession(scope, app.id, { sessionStatus: 'expired' }).catch(() => undefined);
+    throw new Error('NEEDS_REAUTH: reconnect this app to refresh its login, then try again.');
+  }
 
   console.log(
     `[agent:execute] agentRequestId=${agentRequestId} captureOk=true beats=${captureResult.beats.length} durationMs=${captureResult.durationMs}`,

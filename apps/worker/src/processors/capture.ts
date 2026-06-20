@@ -24,11 +24,11 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { Job } from 'bullmq';
 import { CaptureSession } from '@venara/capture';
-import type { CaptureStep } from '@venara/capture';
+import type { CaptureStep, CaptureSessionState } from '@venara/capture';
 import {
   getCaptureWithApp,
-  parseCredentials,
   resolveSecret,
+  setAppSession,
   updateCapture,
   updateJobStatus,
   type WorkspaceScope,
@@ -68,13 +68,23 @@ export async function processCapture(job: Job<CaptureJobData>): Promise<{ ok: tr
     // 2. Set capture status → capturing.
     await updateCapture(scope, captureId, { status: 'capturing' });
 
-    // 3. Resolve credentials if loginMode=credentials.
-    let credentials: { username: string; password: string } | undefined;
-    if (app.loginMode === 'credentials' && app.credentialsRef) {
+    // 3. Resolve the captured auth session if loginMode=session (ADR-001).
+    //    If the app needs auth but has no active session, pause immediately — don't burn a
+    //    Browserbase session we know will hit a login wall.
+    let sessionState: CaptureSessionState | undefined;
+    if (app.loginMode === 'session') {
+      if (app.sessionStatus !== 'active' || !app.credentialsRef) {
+        return await pauseForReauth(scope, app.id, captureId, jobRecordId, job.attemptsMade);
+      }
       const plaintext = await resolveSecret(scope, app.credentialsRef);
-      if (plaintext) {
-        credentials = parseCredentials(plaintext);
-        // NOTE: credentials values are NEVER logged (Brief §17).
+      if (!plaintext) {
+        return await pauseForReauth(scope, app.id, captureId, jobRecordId, job.attemptsMade);
+      }
+      try {
+        // NOTE: session values are NEVER logged (Brief §17).
+        sessionState = JSON.parse(plaintext) as CaptureSessionState;
+      } catch {
+        return await pauseForReauth(scope, app.id, captureId, jobRecordId, job.attemptsMade);
       }
     }
 
@@ -86,8 +96,13 @@ export async function processCapture(job: Job<CaptureJobData>): Promise<{ ok: tr
     const result = await session.run({
       baseUrl: app.baseUrl,
       steps,
-      credentials,
+      sessionState,
     });
+
+    // 5b. Session expired mid-run → pause recaptures and prompt reconnect (don't fail-retry).
+    if (result.outcome === 'needs_reauth') {
+      return await pauseForReauth(scope, app.id, captureId, jobRecordId, job.attemptsMade);
+    }
 
     // 6. Upload artifacts to R2.
     const storage = getStorage();
@@ -139,6 +154,27 @@ export async function processCapture(job: Job<CaptureJobData>): Promise<{ ok: tr
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Handle an app whose auth session is missing/expired (ADR-001): mark the session
+ * `expired` so the dashboard prompts a reconnect, fail this capture (no take produced),
+ * and complete the job WITHOUT throwing — retrying won't help until the user re-auths.
+ */
+async function pauseForReauth(
+  scope: WorkspaceScope,
+  appId: string,
+  captureId: string,
+  jobRecordId: string,
+  attempts: number,
+): Promise<{ ok: true }> {
+  await setAppSession(scope, appId, { sessionStatus: 'expired' }).catch(() => undefined);
+  await updateCapture(scope, captureId, { status: 'failed' }).catch(() => undefined);
+  if (jobRecordId) {
+    await updateJobStatus({ id: jobRecordId, status: 'completed', attempts }).catch(() => undefined);
+  }
+  console.warn(`[capture:worker] app ${appId} needs re-authentication — recaptures paused`);
+  return { ok: true };
+}
 
 /**
  * Parse stepsJson from the Flow row back into CaptureStep[].

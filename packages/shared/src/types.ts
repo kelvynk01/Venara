@@ -7,8 +7,15 @@
 /** User role within a workspace (Brief §7). */
 export type UserRole = 'owner' | 'member';
 
-/** How a connected app authenticates during capture (Brief §7/§8). */
-export type LoginMode = 'none' | 'credentials';
+/**
+ * How a connected app authenticates during capture (Brief §7/§8, ADR-001).
+ * `none`: public app, no login. `session`: the user signed into their own app via the
+ * interactive handoff and Venara holds an authenticated browser session, never a password.
+ */
+export type LoginMode = 'none' | 'session';
+
+/** Lifecycle of a captured auth session (loginMode=session, ADR-001). */
+export type SessionStatus = 'active' | 'expired';
 
 /** Lifecycle of a connected app. */
 export type ConnectedAppStatus = 'connected' | 'error' | 'disabled';

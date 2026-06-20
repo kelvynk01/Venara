@@ -12,6 +12,7 @@ export {
   Prisma,
   UserRole,
   LoginMode,
+  SessionStatus,
   ConnectedAppStatus,
   FlowStatus,
   CaptureStatus,

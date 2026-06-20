@@ -110,8 +110,18 @@ export interface CaptureStepResult {
 
 // ─── Session result ───────────────────────────────────────────────────────────
 
+/**
+ * Outcome of a capture run (ADR-001):
+ *  - `ok`         — the session was authenticated (or none was needed) and steps ran.
+ *  - `needs_reauth` — the stored auth session was missing/expired; steps were NOT run.
+ *    The caller pauses recaptures for this app and prompts the user to reconnect.
+ */
+export type CaptureOutcome = 'ok' | 'needs_reauth';
+
 /** Full result of a completed capture session (Brief §8). */
 export interface CaptureSessionResult {
+  /** Whether the run produced a usable take or needs the user to re-authenticate. */
+  outcome: CaptureOutcome;
   browserbaseSessionId: string;
   /** Raw HTML of the final page state — used as the DOM snapshot for staleness diffing. */
   domSnapshot: Buffer;
@@ -125,23 +135,39 @@ export interface CaptureSessionResult {
   durationMs: number;
 }
 
-// ─── Credentials ─────────────────────────────────────────────────────────────
+// ─── Auth session (ADR-001) ───────────────────────────────────────────────────
 
-/** Resolved plaintext credentials — live only in worker memory, NEVER logged. */
-export interface CaptureCredentials {
-  username: string;
-  password: string;
+/**
+ * A captured, authenticated browser session — Playwright `storageState` shape.
+ * This is what Venara stores (encrypted) instead of a password: cookies + per-origin
+ * localStorage harvested during the interactive login handoff. NEVER logged.
+ */
+export interface CaptureSessionState {
+  cookies: Array<{
+    name: string;
+    value: string;
+    domain: string;
+    path: string;
+    expires?: number;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: 'Strict' | 'Lax' | 'None';
+  }>;
+  origins: Array<{
+    origin: string;
+    localStorage: Array<{ name: string; value: string }>;
+  }>;
 }
 
 // ─── Provider contract ────────────────────────────────────────────────────────
 
 /** Capture-provider contract; the Browserbase adapter implements this (Brief §4/§8). */
 export interface CaptureProvider {
-  /** Open a session against a base URL, optionally authenticating, and record a take. */
+  /** Open a session against a base URL, optionally restoring an auth session, and record a take. */
   runSession(input: {
     baseUrl: string;
     steps: CaptureStep[];
-    credentials?: CaptureCredentials;
+    sessionState?: CaptureSessionState;
   }): Promise<CaptureSessionResult>;
 }
 

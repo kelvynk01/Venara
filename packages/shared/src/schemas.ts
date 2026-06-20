@@ -9,7 +9,8 @@
 import { z } from 'zod';
 
 export const userRoleSchema = z.enum(['owner', 'member']);
-export const loginModeSchema = z.enum(['none', 'credentials']);
+export const loginModeSchema = z.enum(['none', 'session']);
+export const sessionStatusSchema = z.enum(['active', 'expired']);
 export const videoTypeSchema = z.enum(['howto', 'marketing']);
 export const freshnessSchema = z.enum(['live', 'stale']);
 export const renderAspectSchema = z.enum(['16:9', '9:16', '1:1']);
@@ -43,28 +44,24 @@ export const pronunciationSchema = z.object({
   lexicon: z.array(z.object({ term: z.string(), say: z.string() })).optional(),
 });
 
-/** POST /v1/apps — connect an app (Brief §12). Credentials required iff loginMode=credentials. */
-export const connectAppSchema = z
-  .object({
-    name: z.string().min(1).max(120),
-    baseUrl: z
-      .string()
-      .url()
-      .refine((u) => u.startsWith('http://') || u.startsWith('https://'), {
-        message: 'baseUrl must be an http or https URL',
-      }),
-    loginMode: loginModeSchema.default('none'),
-    credentials: z
-      .object({ username: z.string().min(1), password: z.string().min(1) })
-      .optional(),
-    pronunciation: pronunciationSchema.optional(),
-    /** The user attests they own / are authorized to capture this app (Brief §18). */
-    authorized: z.literal(true),
-  })
-  .refine((d) => d.loginMode !== 'credentials' || !!d.credentials, {
-    message: 'credentials are required when loginMode is "credentials"',
-    path: ['credentials'],
-  });
+/**
+ * POST /v1/apps — connect an app (Brief §12, ADR-001).
+ * No credentials are ever submitted here. For loginMode=session the app is created first,
+ * then the user authenticates via the interactive handoff (POST /v1/apps/:id/auth/*).
+ */
+export const connectAppSchema = z.object({
+  name: z.string().min(1).max(120),
+  baseUrl: z
+    .string()
+    .url()
+    .refine((u) => u.startsWith('http://') || u.startsWith('https://'), {
+      message: 'baseUrl must be an http or https URL',
+    }),
+  loginMode: loginModeSchema.default('none'),
+  pronunciation: pronunciationSchema.optional(),
+  /** The user attests they own / are authorized to capture this app (Brief §18). */
+  authorized: z.literal(true),
+});
 
 /** PATCH /v1/apps/:id — update name / pronunciation (Brief §12). */
 export const updateAppSchema = z.object({
@@ -79,6 +76,8 @@ export const connectedAppPublicSchema = z.object({
   baseUrl: z.string(),
   loginMode: loginModeSchema,
   status: z.enum(['connected', 'error', 'disabled']),
+  /** loginMode=session lifecycle: null = not yet authenticated; needs the handoff (ADR-001). */
+  sessionStatus: sessionStatusSchema.nullable().optional(),
   pronunciation: pronunciationSchema.nullable().optional(),
   createdAt: z.string(),
 });

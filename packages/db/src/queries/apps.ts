@@ -3,7 +3,7 @@
  * Every query is scoped by workspaceId; `credentialsRef` is never selected back to
  * clients by callers (it's an internal reference, Brief §17).
  */
-import type { ConnectedAppStatus, LoginMode, Prisma } from '@prisma/client';
+import type { ConnectedAppStatus, LoginMode, Prisma, SessionStatus } from '@prisma/client';
 import { prisma } from '../client';
 import type { WorkspaceScope } from '../scope';
 
@@ -63,6 +63,26 @@ export function setAppStatus(scope: WorkspaceScope, id: string, status: Connecte
   return prisma.connectedApp.updateMany({
     where: { id, workspaceId: scope.workspaceId },
     data: { status },
+  });
+}
+
+/**
+ * Attach (or refresh) the captured auth session for a loginMode=session app (ADR-001).
+ * `credentialsRef` is the encrypted storageState reference; status becomes `active`.
+ * Pass `credentialsRef: null` + status `expired` to mark a session as needing reconnect.
+ */
+export function setAppSession(
+  scope: WorkspaceScope,
+  id: string,
+  input: { credentialsRef?: string | null; sessionStatus: SessionStatus; sessionCapturedAt?: Date | null },
+) {
+  return prisma.connectedApp.updateMany({
+    where: { id, workspaceId: scope.workspaceId },
+    data: {
+      ...(input.credentialsRef !== undefined ? { credentialsRef: input.credentialsRef } : {}),
+      sessionStatus: input.sessionStatus,
+      ...(input.sessionCapturedAt !== undefined ? { sessionCapturedAt: input.sessionCapturedAt } : {}),
+    },
   });
 }
 

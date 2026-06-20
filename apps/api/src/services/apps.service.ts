@@ -10,8 +10,6 @@ import {
   deleteSecret,
   getConnectedApp,
   listConnectedApps,
-  serializeCredentials,
-  storeSecret,
   updateConnectedApp,
   type ConnectedApp,
   type Prisma,
@@ -27,6 +25,7 @@ function toPublicApp(app: ConnectedApp): ConnectedAppPublic {
     baseUrl: app.baseUrl,
     loginMode: app.loginMode,
     status: app.status,
+    sessionStatus: app.sessionStatus ?? null,
     pronunciation: (app.pronunciation as ConnectedAppPublic['pronunciation']) ?? null,
     createdAt: app.createdAt.toISOString(),
   };
@@ -36,26 +35,16 @@ export async function connectApp(
   scope: WorkspaceScope,
   input: ConnectAppInput,
 ): Promise<ConnectedAppPublic> {
-  let credentialsRef: string | null = null;
-  if (input.loginMode === 'credentials' && input.credentials) {
-    // Encrypt and store; only the reference is persisted on the app (Brief §17).
-    credentialsRef = await storeSecret(scope, serializeCredentials(input.credentials));
-  }
-
-  try {
-    const app = await createConnectedApp(scope, {
-      name: input.name,
-      baseUrl: input.baseUrl,
-      loginMode: input.loginMode,
-      credentialsRef,
-      pronunciation: input.pronunciation as Prisma.InputJsonValue | undefined,
-    });
-    return toPublicApp(app);
-  } catch (err) {
-    // Don't leave an orphaned encrypted secret if the app row fails to write.
-    if (credentialsRef) await deleteSecret(scope, credentialsRef).catch(() => undefined);
-    throw err;
-  }
+  // No credentials are submitted at connect time (ADR-001). For loginMode=session the app
+  // is created unauthenticated (sessionStatus=null) and the user authenticates via the
+  // interactive handoff (apps/:id/auth/*), which attaches the encrypted session afterward.
+  const app = await createConnectedApp(scope, {
+    name: input.name,
+    baseUrl: input.baseUrl,
+    loginMode: input.loginMode,
+    pronunciation: input.pronunciation as Prisma.InputJsonValue | undefined,
+  });
+  return toPublicApp(app);
 }
 
 export async function listApps(scope: WorkspaceScope): Promise<ConnectedAppPublic[]> {
